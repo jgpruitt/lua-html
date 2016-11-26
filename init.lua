@@ -22,29 +22,26 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 --]]
 
-local modname = ...
 local M = {}
-_G[modname] = M
-package.loaded[modname] = M
 
 --[[
 void tags may have attributes but they are not allowed to have children or
 a closing tag
 --]]
 local is_void_tag = { 
-	["area"	  ] = true
-,	["base"	  ] = true
-,	["br"	  ] = true
-,	["col"	  ] = true
-,	["hr"	  ] = true
-,	["img"	  ] = true
-,	["input"  ] = true
-,	["link"	  ] = true
-,	["meta"	  ] = true
-,	["param"  ] = true
-,	["command"] = true
-,	["keygen" ] = true
-,	["source" ] = true
+  ["area"	] = true
+, ["base"	] = true
+, ["br"     ] = true
+, ["col"    ] = true
+, ["hr"     ] = true
+, ["img"    ] = true
+, ["input"  ] = true
+, ["link"	] = true
+, ["meta"   ] = true
+, ["param"  ] = true
+, ["command"] = true
+, ["keygen" ] = true
+, ["source" ] = true
 }
 
 local function render_attribute(name, value)
@@ -203,7 +200,10 @@ local tags = {
 , "sub"
 , "summary"
 , "sub"
---, "table" a bit dangerous due to the "table" package in std lib. see "tbl" below 
+--[[
+, "table" 
+    a bit dangerous due to the "table" package in std lib. see "tbl" below 
+--]]
 , "tbody"
 , "td"
 , "textarea"
@@ -232,18 +232,17 @@ M.tbl = function(args)
 end
 
 M.comment = function(comment)
-	assert(type(comment) == "string", "The comment tag only supports a single string argument!")
+	assert(type(comment) == "string", 
+        "The comment tag only supports a single string argument!")
 	return string.format("<!-- %s -->", comment)
 end
 
-M.document = function(elements)
-	local buf = {"<!DOCTYPE html>"}
+M.doctype = function()
+    return "<!DOCTYPE html>"
+end
 
-	--[[
-	in all likelyhood there will only be one element at the root level in the
-	document: the "html" element. however, there could be any number of comments
-	before or after the html element.
-	--]]
+M.render = function(elements)
+	local buf = {}
 	for _, element in ipairs(elements) do
 		buf[#buf + 1] = tostring(element)
 	end
