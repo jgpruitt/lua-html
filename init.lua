@@ -1,8 +1,36 @@
+--[[
+MIT License
+
+Copyright (c) 2016 John Pruitt <jgpruitt@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+--]]
+
 local modname = ...
 local M = {}
 _G[modname] = M
 package.loaded[modname] = M
 
+--[[
+void tags may have attributes but they are not allowed to have children or
+a closing tag
+--]]
 local is_void_tag = { 
 	["area"   ] = true
 ,	["base"   ] = true
@@ -20,71 +48,68 @@ local is_void_tag = {
 }
 
 local function render_attribute(name, value)
-	if type(value) == "table" then
-		return string.format(" %s=\"%s\"", name, table.concat(value, " "))
-	else
-		return string.format(" %s=\"%s\"", name, tostring(value))
+    assert(type(name) == "string", "name must be a string")
+    local format = " %s=\"%s\""
+	local t = type(value)
+    if t == "table" then
+		return string.format(format, name, table.concat(value, " "))
+    elseif t == "function" then
+        return string.format(format, name, tostring(value()))
+	elseif t == "boolean" or t == "number" then
+		return string.format(format, name, tostring(value))
+    elseif t == "string" then
+		return string.format(format, name, value)
+    else -- nil, thread, or userdata
+        return ""
 	end 
 end
 
-local function render_attributes(buf, attributes)
-	if not attributes or #attributes == 0 then
-		return
-	end
-
-	for name, value in pairs(attributes) do
-		buf[#buf + 1] = render_attribute(name, value) 
-	end
-end
-
-local function render_start_tag(buf, tag, attributes)
-	buf[#buf + 1] = string.format("<%s%s>", tag, render_attributes(attributes))
-end
-
-local function render_end_tag(buf, tag)
-	buf[#buf + 1] = string.format("</%s>", tag)
-end
-
-local function render_children(buf, children)
-	local t = type(children)
-	if t == nil then
-		return
-	elseif  t == "string" then
-		buf[#buf + 1] = children
+local function render_child(child)
+	local t = type(child)
+	if t == "string" then
+		return child
 	elseif t == "function" then
-		buf[#buf + 1] = tostring(children())
+		return tostring(child())
 	elseif t == "table" then
-		for _, child in ipairs(children) do
-			buf[#buf + 1] = render_children(buf, child)
+        local buf = {}
+		for _, v in ipairs(child) do
+			buf[#buf + 1] = render_child(v)
 		end
-	else
-		buf[#buf + 1] = tostring(children)
+        return table.concat(buf)
+	elseif t == "boolean" or t == "number" then
+		return tostring(children)
+    else -- nil, thread, or userdata 
+        return ""
 	end
 end
 
-local function render_element(tag, attributes, children)
-    local buf = {}
-	if is_void_tag[tag] then
-		render_start_tag(buf, tag, attributes)
-	else
-		render_start_tag(buf, tag, attributes)
-        render_children(buf, children)
-		render_end_tag(buf, tag)
-	end
-    return table.concat(buf)
-end
+local function render(tag, args)
+    assert(type(tag) == "string", "tag must be a string")
 
-local function split(args)
+    local is_void = is_void_tag[tag]
+
     local attributes = {}
     local children = {}
     for k, v in pairs(args) do
         if type(k) == "number" then
-            children[#children + 1] = v
+            if not is_void then
+                children[#children + 1] = render_child(v)
+            end
         else
-            attributes[#attributes + 1] = v
+            attributes[#attributes + 1] = render_attribute(k, v)
         end
     end
-    return attributes, children
+    
+    attributes = table.concat(attributes)
+    children = table.concat(children)
+
+    local buf = {}
+    buf[#buf + 1] = string.format("<%s%s>", tag, attributes)
+    if not is_void then
+        buf[#buf + 1] = children
+        buf[#buf + 1] = string.format("</%s>", tag)
+    end
+    return table.concat(buf)
 end
 
 local tags = {
@@ -178,7 +203,7 @@ local tags = {
 , "sub"
 , "summary"
 , "sub"
-, "table"
+--, "table" a bit dangerous due to the "table" package in std lib. see "tbl" below 
 , "tbody"
 , "td"
 , "textarea"
@@ -198,30 +223,40 @@ local tags = {
 
 for _, tag in ipairs(tags) do
     M[tag] = function(args)
-        local attributes, children = split(args)
-        return render_element(tag, attributes, children)
+        return render(tag, args)
     end
+end
+
+M.tbl = function(args)
+    return render("table", args)
 end
 
 M.comment = function(comment)
     assert(type(comment) == "string", "The comment tag only supports a single string argument!")
-    return string.format("<!-- %s -->", args)
+    return string.format("<!-- %s -->", comment)
 end
 
-M.doctype = function()
-    return "<!DOCTYPE html>"
-end
 
-M.render = function(elements)
-    local buf = {}
+M.document = function(elements)
+    local buf = {"<!DOCTYPE html>"}
+
+    --[[
+    in all likelyhood there will only be one element at the root level in the
+    document: the "html" element. however, there could be any number of comments
+    before or after the html element.
+    --]]
     for _, element in ipairs(elements) do
         buf[#buf + 1] = tostring(element)
     end
     return table.concat(buf)
 end
 
+--[[
+if you'd like the tag functions in the root of your environment for convenience
+sake, call import(_ENV) and they will be injected directly into it
+--]]
 M.import = function(env)
-    for k, v in pairs(exports) do
+    for k, v in pairs(M) do
         if k ~= "import" then
             env[k] = v
         end
