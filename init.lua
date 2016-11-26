@@ -32,15 +32,15 @@ void tags may have attributes but they are not allowed to have children or
 a closing tag
 --]]
 local is_void_tag = { 
-	["area"   ] = true
-,	["base"   ] = true
-,	["br"     ] = true
-,	["col"    ] = true
-,	["hr"     ] = true
-,	["img"    ] = true
+	["area"	  ] = true
+,	["base"	  ] = true
+,	["br"	  ] = true
+,	["col"	  ] = true
+,	["hr"	  ] = true
+,	["img"	  ] = true
 ,	["input"  ] = true
-,	["link"   ] = true
-,	["meta"   ] = true
+,	["link"	  ] = true
+,	["meta"	  ] = true
 ,	["param"  ] = true
 ,	["command"] = true
 ,	["keygen" ] = true
@@ -48,19 +48,19 @@ local is_void_tag = {
 }
 
 local function render_attribute(name, value)
-    assert(type(name) == "string", "name must be a string")
-    local format = " %s=\"%s\""
+	assert(type(name) == "string", "name must be a string")
+	local format = " %s=\"%s\""
 	local t = type(value)
-    if t == "table" then
+	if t == "table" then
 		return string.format(format, name, table.concat(value, " "))
-    elseif t == "function" then
-        return string.format(format, name, tostring(value()))
+	elseif t == "function" then
+		return string.format(format, name, tostring(value()))
 	elseif t == "boolean" or t == "number" then
 		return string.format(format, name, tostring(value))
-    elseif t == "string" then
+	elseif t == "string" then
 		return string.format(format, name, value)
-    else -- nil, thread, or userdata
-        return ""
+	else -- nil, thread, or userdata
+		return ""
 	end 
 end
 
@@ -71,45 +71,45 @@ local function render_child(child)
 	elseif t == "function" then
 		return tostring(child())
 	elseif t == "table" then
-        local buf = {}
+		local buf = {}
 		for _, v in ipairs(child) do
 			buf[#buf + 1] = render_child(v)
 		end
-        return table.concat(buf)
+		return table.concat(buf)
 	elseif t == "boolean" or t == "number" then
 		return tostring(children)
-    else -- nil, thread, or userdata 
-        return ""
+	else -- nil, thread, or userdata 
+		return ""
 	end
 end
 
 local function render(tag, args)
-    assert(type(tag) == "string", "tag must be a string")
+	assert(type(tag) == "string", "tag must be a string")
 
-    local is_void = is_void_tag[tag]
+	local is_void = is_void_tag[tag]
 
-    local attributes = {}
-    local children = {}
-    for k, v in pairs(args) do
-        if type(k) == "number" then
-            if not is_void then
-                children[#children + 1] = render_child(v)
-            end
-        else
-            attributes[#attributes + 1] = render_attribute(k, v)
-        end
-    end
-    
-    attributes = table.concat(attributes)
-    children = table.concat(children)
+	local attributes = {}
+	local children = {}
+	for k, v in pairs(args) do
+		if type(k) == "number" then
+			if not is_void then
+				children[#children + 1] = render_child(v)
+			end
+		else
+			attributes[#attributes + 1] = render_attribute(k, v)
+		end
+	end
+	
+	attributes = table.concat(attributes)
+	children = table.concat(children)
 
-    local buf = {}
-    buf[#buf + 1] = string.format("<%s%s>", tag, attributes)
-    if not is_void then
-        buf[#buf + 1] = children
-        buf[#buf + 1] = string.format("</%s>", tag)
-    end
-    return table.concat(buf)
+	local buf = {}
+	buf[#buf + 1] = string.format("<%s%s>", tag, attributes)
+	if not is_void then
+		buf[#buf + 1] = children
+		buf[#buf + 1] = string.format("</%s>", tag)
+	end
+	return table.concat(buf)
 end
 
 local tags = {
@@ -222,33 +222,32 @@ local tags = {
 }
 
 for _, tag in ipairs(tags) do
-    M[tag] = function(args)
-        return render(tag, args)
-    end
+	M[tag] = function(args)
+		return render(tag, args)
+	end
 end
 
 M.tbl = function(args)
-    return render("table", args)
+	return render("table", args)
 end
 
 M.comment = function(comment)
-    assert(type(comment) == "string", "The comment tag only supports a single string argument!")
-    return string.format("<!-- %s -->", comment)
+	assert(type(comment) == "string", "The comment tag only supports a single string argument!")
+	return string.format("<!-- %s -->", comment)
 end
 
-
 M.document = function(elements)
-    local buf = {"<!DOCTYPE html>"}
+	local buf = {"<!DOCTYPE html>"}
 
-    --[[
-    in all likelyhood there will only be one element at the root level in the
-    document: the "html" element. however, there could be any number of comments
-    before or after the html element.
-    --]]
-    for _, element in ipairs(elements) do
-        buf[#buf + 1] = tostring(element)
-    end
-    return table.concat(buf)
+	--[[
+	in all likelyhood there will only be one element at the root level in the
+	document: the "html" element. however, there could be any number of comments
+	before or after the html element.
+	--]]
+	for _, element in ipairs(elements) do
+		buf[#buf + 1] = tostring(element)
+	end
+	return table.concat(buf)
 end
 
 --[[
@@ -256,11 +255,11 @@ if you'd like the tag functions in the root of your environment for convenience
 sake, call import(_ENV) and they will be injected directly into it
 --]]
 M.import = function(env)
-    for k, v in pairs(M) do
-        if k ~= "import" then
-            env[k] = v
-        end
-    end
+	for k, v in pairs(M) do
+		if k ~= "import" then
+			env[k] = v
+		end
+	end
 end
 
 return M
