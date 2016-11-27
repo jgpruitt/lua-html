@@ -22,92 +22,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 --]]
 
-local M = {}
+--dependencies:
+local _G = _G
+local table = table
+local string = string
+local assert = assert
+local type = type
+local tostring = tostring
+local ipairs = ipairs
+local pairs = pairs
+
+local M = {} --the module
+_ENV = M --no accidental assignments to global scope or undeclared dependencies
 
 --[[
-void tags may have attributes but they are not allowed to have children or
-a closing tag
+    PRIVATE MEMBERS
 --]]
-local is_void_tag = { 
-  ["area"	] = true
-, ["base"	] = true
-, ["br"     ] = true
-, ["col"    ] = true
-, ["hr"     ] = true
-, ["img"    ] = true
-, ["input"  ] = true
-, ["link"	] = true
-, ["meta"   ] = true
-, ["param"  ] = true
-, ["command"] = true
-, ["keygen" ] = true
-, ["source" ] = true
-}
-
-local function render_attribute(name, value)
-	assert(type(name) == "string", "name must be a string")
-	local format = " %s=\"%s\""
-	local t = type(value)
-	if t == "table" then
-		return string.format(format, name, table.concat(value, " "))
-	elseif t == "function" then
-		return string.format(format, name, tostring(value()))
-	elseif t == "boolean" or t == "number" then
-		return string.format(format, name, tostring(value))
-	elseif t == "string" then
-		return string.format(format, name, value)
-	else -- nil, thread, or userdata
-		return ""
-	end 
-end
-
-local function render_child(child)
-	local t = type(child)
-	if t == "string" then
-		return child
-	elseif t == "function" then
-		return tostring(child())
-	elseif t == "table" then
-		local buf = {}
-		for _, v in ipairs(child) do
-			buf[#buf + 1] = render_child(v)
-		end
-		return table.concat(buf)
-	elseif t == "boolean" or t == "number" then
-		return tostring(children)
-	else -- nil, thread, or userdata 
-		return ""
-	end
-end
-
-local function render(tag, args)
-	assert(type(tag) == "string", "tag must be a string")
-
-	local is_void = is_void_tag[tag]
-
-	local attributes = {}
-	local children = {}
-	for k, v in pairs(args) do
-		if type(k) == "number" then
-			if not is_void then
-				children[#children + 1] = render_child(v)
-			end
-		else
-			attributes[#attributes + 1] = render_attribute(k, v)
-		end
-	end
-	
-	attributes = table.concat(attributes)
-	children = table.concat(children)
-
-	local buf = {}
-	buf[#buf + 1] = string.format("<%s%s>", tag, attributes)
-	if not is_void then
-		buf[#buf + 1] = children
-		buf[#buf + 1] = string.format("</%s>", tag)
-	end
-	return table.concat(buf)
-end
 
 local tags = {
   "a"
@@ -200,10 +130,7 @@ local tags = {
 , "sub"
 , "summary"
 , "sub"
---[[
-, "table" 
-    a bit dangerous due to the "table" package in std lib. see "tbl" below 
---]]
+, "table"
 , "tbody"
 , "td"
 , "textarea"
@@ -221,27 +148,97 @@ local tags = {
 , "wbr"
 }
 
-for _, tag in ipairs(tags) do
-	M[tag] = function(args)
-		return render(tag, args)
+--[[
+void tags may have attributes but they are not allowed to have children or
+a closing tag
+--]]
+local is_void_tag = { 
+  ["area"	] = true
+, ["base"	] = true
+, ["br"     ] = true
+, ["col"    ] = true
+, ["hr"     ] = true
+, ["img"    ] = true
+, ["input"  ] = true
+, ["link"	] = true
+, ["meta"   ] = true
+, ["param"  ] = true
+, ["command"] = true
+, ["keygen" ] = true
+, ["source" ] = true
+}
+
+local function render_attribute(name, value)
+	assert(type(name) == "string", "name must be a string")
+	local format = " %s=\"%s\""
+	local t = type(value)
+	if t == "table" then
+		return string.format(format, name, table.concat(value, " "))
+	elseif t == "function" then
+		return string.format(format, name, tostring(value()))
+	elseif t == "boolean" or t == "number" then
+		return string.format(format, name, tostring(value))
+	elseif t == "string" then
+		return string.format(format, name, value)
+	else -- nil, thread, or userdata
+		return ""
+	end 
+end
+
+local function render_child(child)
+	local t = type(child)
+	if t == "string" then
+		return child
+	elseif t == "function" then
+		return tostring(child())
+	elseif t == "table" then
+		local buf = {}
+		for _, v in ipairs(child) do
+			buf[#buf + 1] = render_child(v)
+		end
+		return table.concat(buf)
+	elseif t == "boolean" or t == "number" then
+		return tostring(children)
+	else -- nil, thread, or userdata 
+		return ""
 	end
 end
 
-M.tbl = function(args)
-	return render("table", args)
+local function render_element(tag, args)
+	assert(type(tag) == "string", "tag must be a string")
+    assert(type(args) == "table", "args must be a table")
+
+	local is_not_void = not is_void_tag[tag]
+	local attributes = {}
+	local children = {}
+
+	for k, v in pairs(args) do
+		if type(k) == "number" then
+			if is_not_void then --void tags cannot have children
+				children[#children + 1] = render_child(v)
+			end
+		else
+			attributes[#attributes + 1] = render_attribute(k, v)
+		end
+	end
+	
+	attributes = table.concat(attributes)
+	children = table.concat(children)
+
+	local buf = {}
+	buf[#buf + 1] = string.format("<%s%s>", tag, attributes)
+	if is_not_void then --void tags cannot have children or end tag
+		buf[#buf + 1] = children
+		buf[#buf + 1] = string.format("</%s>", tag)
+	end
+	return table.concat(buf)
 end
 
-M.comment = function(comment)
-	assert(type(comment) == "string", 
-        "The comment tag only supports a single string argument!")
-	return string.format("<!-- %s -->", comment)
-end
+--[[
+    PUBLIC MEMBERS
+--]]
 
-M.doctype = function()
-    return "<!DOCTYPE html>"
-end
-
-M.render = function(elements)
+function render(elements)
 	local buf = {}
 	for _, element in ipairs(elements) do
 		buf[#buf + 1] = tostring(element)
@@ -249,16 +246,39 @@ M.render = function(elements)
 	return table.concat(buf)
 end
 
---[[
-if you'd like the tag functions in the root of your environment for convenience
-sake, call import(_ENV) and they will be injected directly into it
---]]
-M.import = function(env)
-	for k, v in pairs(M) do
-		if k ~= "import" then
-			env[k] = v
-		end
+--create the tag functions that work in the standard way
+for _, tag in ipairs(tags) do
+    M[tag] = function(args)
+		return render_element(tag, args or {})
 	end
+end
+
+--tbl is a tag function but the fn name differs from the tag name
+function tbl(args)
+	return render_element("table", args)
+end
+
+--comment is a tag function that only accepts a single string arg
+function comment(body) 
+	assert(type(body) == "string", 
+        "The comment tag only supports a single string argument!")
+	return string.format("<!-- %s -->", body)
+end
+
+--doctype is a tag function which takes no args
+function doctype()
+    return "<!DOCTYPE html>"
+end
+
+--injects this module's members directly into an _ENV
+function import(env)
+    env = env or {}
+	for k, v in pairs(M) do
+        if k ~= "import" then
+            env[k] = v
+        end
+	end
+    return env
 end
 
 return M
